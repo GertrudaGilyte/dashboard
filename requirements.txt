@@ -1,4 +1,3 @@
-$ pip freeze
 blinker==1.8.2
 certifi==2024.6.2
 charset-normalizer==3.3.2
