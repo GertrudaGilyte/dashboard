@@ -14,6 +14,7 @@ df_countries =df[df['country'].isin(['Germany', 'Belgium', 'Denmark'])]
 
 #instanciate the app
 app =dash.Dash(external_stylesheets=[dbc.themes.QUARTZ])
+server =app.server
 
 #the general syntax for a table
 d_table = dash_table.DataTable(df_germany.to_dict('records'),
