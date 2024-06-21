@@ -24,7 +24,7 @@ password = get_env_var('POSTGRES_PW')
 host = get_env_var('POSTGRES_HOST')
 port = get_env_var('POSTGRES_PORT')
 database = get_env_var('DB_CLIMATE')
-weather_api_key = get_env_var('WEATHER_API')
+weather_api_key = get_env_var('WEATHER_API_KEY')
 
 # Create a connection string and engine
 connection_string = f'postgresql://{username}:{password}@{host}:{port}/{database}'
