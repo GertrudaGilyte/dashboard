@@ -1,22 +1,30 @@
 import os
 import pandas as pd
 from sqlalchemy import create_engine
-from dotenv import load_dotenv
 from dash import Dash, html, dcc, Input, Output
 import plotly.express as px
 import dash_bootstrap_components as dbc
 
-# Load environment variables
-dotenv_path = 'C:\\Users\\gergi\\Downloads\\dashboard\\dashboard\\token.env'
-load_dotenv(dotenv_path)
+# Load environment variables if running locally
+if os.getenv('ENV') != 'PRODUCTION':
+    from dotenv import load_dotenv
+    dotenv_path = 'C:\\Users\\gergi\\Downloads\\dashboard\\dashboard\\token.env'
+    load_dotenv(dotenv_path)
+
+# Function to get environment variable or raise an error if not found
+def get_env_var(var_name):
+    value = os.getenv(var_name)
+    if value is None:
+        raise ValueError(f"Environment variable {var_name} is not set.")
+    return value
 
 # Database connection parameters
-username = os.getenv('POSTGRES_USER')
-password = os.getenv('POSTGRES_PW')
-host = os.getenv('POSTGRES_HOST')
-port = os.getenv('POSTGRES_PORT')
-database = os.getenv('DB_CLIMATE')
-weather_api_key = os.getenv('WEATHER_API')
+username = get_env_var('POSTGRES_USER')
+password = get_env_var('POSTGRES_PW')
+host = get_env_var('POSTGRES_HOST')
+port = get_env_var('POSTGRES_PORT')
+database = get_env_var('DB_CLIMATE')
+weather_api_key = get_env_var('WEATHER_API')
 
 # Create a connection string and engine
 connection_string = f'postgresql://{username}:{password}@{host}:{port}/{database}'
