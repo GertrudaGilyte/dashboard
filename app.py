@@ -1,100 +1,98 @@
-import dash
-from dash import Dash, html, dcc, dash_table
-import dash_bootstrap_components as dbc 
-
-# we of course need plotly and pandas
-import plotly.express as px
+import os
 import pandas as pd
+from sqlalchemy import create_engine
+from dotenv import load_dotenv
+from dash import Dash, html, dcc, Input, Output
+import plotly.express as px
+import dash_bootstrap_components as dbc
 
-df = px.data.gapminder()
-df_germany = df[df['country']=='Germany']
-df_germany = df_germany[['year', 'lifeExp', 'pop', 'gdpPercap']]
-df_countries =df[df['country'].isin(['Germany', 'Belgium', 'Denmark'])]
+# Load environment variables
+dotenv_path = 'C:\\Users\\gergi\\Downloads\\dashboard\\dashboard\\token.env'
+load_dotenv(dotenv_path)
 
+# Database connection parameters
+username = os.getenv('POSTGRES_USER')
+password = os.getenv('POSTGRES_PW')
+host = os.getenv('POSTGRES_HOST')
+port = os.getenv('POSTGRES_PORT')
+database = os.getenv('DB_CLIMATE')
+weather_api_key = os.getenv('WEATHER_API')
 
-#instanciate the app
-app =dash.Dash(external_stylesheets=[dbc.themes.QUARTZ])
-server =app.server
+# Create a connection string and engine
+connection_string = f'postgresql://{username}:{password}@{host}:{port}/{database}'
+engine = create_engine(connection_string)
 
-#the general syntax for a table
-d_table = dash_table.DataTable(df_germany.to_dict('records'),
-                                  [{"name": i, "id": i} for i in df_germany.columns],
-                                  style_data={'color': 'white','backgroundColor': 'teal'},
-                              style_header={
-                                  'backgroundColor': 'rgb(210, 210, 210)',
-                                  'color': 'black','fontWeight': 'bold'}) 
+# Query to load data into DataFrame
+query = """
+SELECT city, year_and_week, avg_temp_c, lat, lon
+FROM mart_conditions_week;
+"""
+df = pd.read_sql(query, engine)
 
-# update the table size and align it in the center
+# Initialize the Dash app with Bootstrap theme
+app = Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+server = app.server  # This line is added for deployment on Render
 
-table_updated = dash_table.DataTable(df_germany.to_dict('records'),
-                                  [{"name": i, "id": i} for i in df_germany.columns],
-                               style_data={'color': 'white','backgroundColor': 'black'},
-                              style_header={
-                                  'backgroundColor': 'rgb(210, 210, 210)',
-                                  'color': 'black','fontWeight': 'bold'}, 
-                                     style_table={
-                                         'minHeight': '400px', 'height': '400px', 'maxHeight': '400px',
-                                         'minWidth': '900px', 'width': '900px', 'maxWidth': '900px', 
-                                         'marginLeft': 'auto', 'marginRight': 'auto',
-                                     'marginTop': 0, 'marginBottom': 0} 
-                                     )
-#adding a figure
-fig = px.bar(df_countries, 
-             x='year', 
-             y='lifeExp',  
-             color='country',
-             barmode='group',
-             height=300, title = "Germany vs Denmark & Belgium",)
+# Define the layout with Bootstrap components
+app.layout = dbc.Container([
+    dbc.Row([
+        dbc.Col(html.H1("Interactive Temperature Dashboard"), className="text-center my-4")
+    ]),
+    dbc.Row([
+        dbc.Col([
+            dcc.Dropdown(
+                id='city-dropdown',
+                options=[{'label': city, 'value': city} for city in df['city'].unique()],
+                value='Berlin',
+                className="mb-4"
+            )
+        ], width=12)
+    ]),
+    dbc.Row([
+        dbc.Col(dcc.Graph(id='temperature-map'), width=6),
+        dbc.Col(dcc.Graph(id='line-chart'), width=6)
+    ])
+], fluid=True, style={'backgroundColor': 'neon green'})
 
-fig = fig.update_layout(
-        plot_bgcolor="#222222", paper_bgcolor="#222222", font_color="white"
+@app.callback(
+    [Output('temperature-map', 'figure'),
+     Output('line-chart', 'figure')],
+    Input('city-dropdown', 'value')
+)
+def update_figures(selected_city):
+    filtered_df = df[df['city'] == selected_city]
+    
+    # Creating the scatter geo map for the selected city
+    fig_map = px.scatter_geo(filtered_df,
+                             lat='lat',
+                             lon='lon',
+                             color='avg_temp_c',
+                             hover_name='city',
+                             size='avg_temp_c',
+                             projection='natural earth',
+                             title=f'Temperature Overview for {selected_city}')
+    
+    fig_map.update_layout(
+        geo=dict(
+            showland=True,
+            landcolor="whitesmoke",
+            oceancolor="lightblue",
+            showocean=True
+        )
     )
-
-graph = dcc.Graph(figure=fig)
-
-fig2 = px.line(df_germany, x='year', y='lifeExp', height=300, title="Life Expectancy in Germany", markers=True)
-fig2 = fig2.update_layout(
-        plot_bgcolor="#222222", paper_bgcolor="#222222", font_color="white"
+    
+    # Creating the line chart for temperature fluctuations
+    fig_line = px.line(df[df['city'].isin([selected_city])],
+                       x='year_and_week', y='avg_temp_c', color='city',
+                       title='Temperature Fluctuations by City')
+    
+    fig_line.update_layout(
+        xaxis_title='Week of the Year',
+        yaxis_title='Average Temperature (°C)',
+        legend_title='City'
     )
-graph2 = dcc.Graph(figure=fig2)
+    
+    return fig_map, fig_line
 
-fig3 = px.choropleth(df_countries, locations='iso_alpha', 
-                    projection='natural earth', animation_frame="year",
-                    scope='europe',   #we are adding the scope as europe
-                    color='lifeExp', locationmode='ISO-3', 
-                    color_continuous_scale=px.colors.sequential.ice)
-
-fig3 = fig3.update_layout(
-        plot_bgcolor="#222222", paper_bgcolor="#222222", font_color="white", geo_bgcolor="#222222"
-    )
-
-# here we needed to change the geo color also to make the world black
-
-graph3 = dcc.Graph(figure=fig3)
-# set app layout
-# app.layout = html.Div([html.H1('My First Spicy Dash', style={'textAlign': 'center', 'color': 'orange'}), 
-#                        html.H2('Welcome', style ={'paddingLeft': '30px'}),
-#                        html.H3('These are the Graphs'),
-#                        html.Div([html.Div('Germany', style={'backgroundColor': 'coral', 'color': 'white'}),
-#                                   table_updated,
-#                                   graph]),
-# ])
-
-
-app.layout = html.Div([html.H1('Gap Minder Analysis of Germany', style={'textAlign': 'center', 'color': 'coral'}), 
-                       html.H3("Using the gapminder data we take a look at Germany's profile"),
-                       html.Div([html.Div('Germany', 
-                                          style={'backgroundColor': 'coral', 'color': 'white', 
-                                                 'width': '900px',
-                                                  'marginLeft': 'auto', 'marginRight': 'auto'}),
-                                                  table_updated,
-                                html.Div(
-                                    [dbc.Row(
-                                    [dbc.Col(html.Div(graph)),
-                                    dbc.Col(html.Div(graph2)),]),]), 
-                                    graph3])
-
-                    
-])
 if __name__ == '__main__':
-     app.run_server()
+    app.run_server(debug=True)
